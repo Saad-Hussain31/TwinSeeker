@@ -98,7 +98,8 @@ int main(int argc, char* argv[]) {
 		}
 		visitedFiles[hash].push_back(file);
     }
-    // Print results
+    
+    // print results
 	cout << "Duplicates:\n";
 	for (auto& f : visitedFiles) {
 		if (f.second.size() == 1) continue;
