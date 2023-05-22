@@ -33,3 +33,27 @@ void HashFunction::stateRegister() {
     srTotalLength = 0;
 }
 
+void HashFunction::adjustDigest(const unsigned char* text,
+                                unsigned int textLength) {
+                                    
+    unsigned int blockNB;
+    unsigned int key newLen, remLen, tempLen;
+    const unsigned char* shiftedMsg;
+
+    tempLen = BLOCK_SIZE_256 - srLength;
+    remLen = textLength < tempLen ? textLength : tempLen;
+    memcpy(&srBlock[srLength], text, remLen);
+    if(srLength + remLen < BLOCK_SIZE_256) {
+        srLength += tempLen;
+        return;
+    }
+
+    newLen = textLength - remLen;
+    blockNB = newLen / BLOCK_SIZE_256;
+    shiftedMsg = text + remLen;
+    compress(shiftedMsg, blockNB);
+    remLen = newLen % BLOCK_SIZE_256;
+    memcpy(srBlock, &shiftedMsg[blockNB << 6], remLen);
+    srLength = remLen;
+    srTotalLength += (blockNB +1) << 6;
+}

@@ -11,9 +11,9 @@ class HashFunction {
     
     public:
         void stateRegister();
-        void adjustDigest(const unsigned char * text, unsigned int textLength);
+        void adjustDigest(const unsigned char * text, unsigned int textLength); //process data in chunks
         void digestFinal(unsigned char * digest);
-        static const unsigned int PADD_SIZE = (256/8);
+        static const unsigned int PADD_SIZE = (256/8); //represents 32 bytes of opt
 
     protected:
         void compress(const unsigned char* message, unsigned int blockNB);
