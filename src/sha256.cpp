@@ -1,5 +1,13 @@
 #include "sha256.hpp"
+#include <cstring>
 
+#define SHAF_UNPACK32(x, str)                 \
+{                                             \
+    *((str) + 3) = (register8) ((x)      );       \
+    *((str) + 2) = (register8) ((x) >>  8);       \
+    *((str) + 1) = (register8) ((x) >> 16);       \
+    *((str) + 0) = (register8) ((x) >> 24);       \
+}
 
 const unsigned int HashFunction::hashKeys[64] = 
             {0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
@@ -37,7 +45,7 @@ void HashFunction::adjustDigest(const unsigned char* text,
                                 unsigned int textLength) {
                                     
     unsigned int blockNB;
-    unsigned int key newLen, remLen, tempLen;
+    unsigned int key, newLen, remLen, tempLen;
     const unsigned char* shiftedMsg;
 
     tempLen = BLOCK_SIZE_256 - srLength;
@@ -57,3 +65,25 @@ void HashFunction::adjustDigest(const unsigned char* text,
     srLength = remLen;
     srTotalLength += (blockNB +1) << 6;
 }
+
+void HashFunction::digestFinal(unsigned char *digest)
+{
+    unsigned int blockNB;
+    unsigned int pmLength;
+    unsigned int length;
+    int i;
+    blockNB = (1 + ((BLOCK_SIZE_256 - 9)
+                     < (srLength % BLOCK_SIZE_256)));
+    length = (srTotalLength + srLength) << 3;
+    pmLength = blockNB << 6;
+    memset(srBlock + srLength, 0, pmLength - srLength);
+    srBlock[srLength] = 0x80;
+    SHAF_UNPACK32(length, srBlock + pmLength - 4);
+    compress(srBlock, blockNB);
+    for (i = 0 ; i < 8; i++) {
+        SHAF_UNPACK32(sr[i], &digest[i << 2]);
+    }
+}
+
+
+
