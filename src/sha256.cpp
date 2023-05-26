@@ -51,15 +51,15 @@ void HashFunction::adjustDigest(const unsigned char* text,
     tempLen = BLOCK_SIZE_256 - srLength;
     remLen = textLength < tempLen ? textLength : tempLen;
     memcpy(&srBlock[srLength], text, remLen);
-    if(srLength + remLen < BLOCK_SIZE_256) {
-        srLength += tempLen;
+    if(srLength + textLength < BLOCK_SIZE_256) {
+        srLength += textLength;
         return;
     }
 
     newLen = textLength - remLen;
     blockNB = newLen / BLOCK_SIZE_256;
     shiftedMsg = text + remLen;
-    compress(shiftedMsg, blockNB);
+    compress(srBlock, blockNB);
     remLen = newLen % BLOCK_SIZE_256;
     memcpy(srBlock, &shiftedMsg[blockNB << 6], remLen);
     srLength = remLen;
