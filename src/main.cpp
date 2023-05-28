@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <unordered_set>
 #include <unordered_map>
+#include "sha256.hpp"
 
 
 namespace fs = std::filesystem;

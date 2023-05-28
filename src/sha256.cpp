@@ -1,5 +1,6 @@
 #include "sha256.hpp"
 #include <cstring>
+#include <vector>
 
 #define SHAF_UNPACK32(x, str)                 \
 {                                             \
@@ -7,6 +8,30 @@
     *((str) + 2) = (register8) ((x) >>  8);       \
     *((str) + 1) = (register8) ((x) >> 16);       \
     *((str) + 0) = (register8) ((x) >> 24);       \
+}
+
+#define R_SHFT(x, n)    (x >> n)  //Right shift function
+#define R_ROTATE(x, n)   ((x >> n) | (x << ((sizeof(x) << 3) - n))) //Right rotate function
+#define L_ROTATE(x, n)   ((x << n) | (x >> ((sizeof(x) << 3) - n))) //Left rotate function
+#define CHOICE_OF(x, y, z)  ((x & y) ^ (~x & z)) //function to find choice of
+#define MAJORITY_OF(x, y, z) ((x & y) ^ (x & z) ^ (y & z)) //function to find majority of
+#define SHAF_1(x) (R_ROTATE(x,  2) ^ R_ROTATE(x, 13) ^ R_ROTATE(x, 22)) //sigma rotation function
+#define SHAF_2(x) (R_ROTATE(x,  6) ^ R_ROTATE(x, 11) ^ R_ROTATE(x, 25)) //sigma rotation function
+#define SHAF_3(x) (R_ROTATE(x,  7) ^ R_ROTATE(x, 18) ^ R_SHFT(x,  3)) //sigma0 rotation
+#define SHAF_4(x) (R_ROTATE(x, 17) ^ R_ROTATE(x, 19) ^ R_SHFT(x, 10)) //sigma1 rotation
+#define SHAF_UNPACK32(x, str)                 \
+{                                             \
+    *((str) + 3) = (register8) ((x)      );       \
+    *((str) + 2) = (register8) ((x) >>  8);       \
+    *((str) + 1) = (register8) ((x) >> 16);       \
+    *((str) + 0) = (register8) ((x) >> 24);       \
+}
+#define SHAF_PACK32(str, x)                   \
+{                                             \
+    *(x) =   ((register32) *((str) + 3)      )    \
+           | ((register32) *((str) + 2) <<  8)    \
+           | ((register32) *((str) + 1) << 16)    \
+           | ((register32) *((str) + 0) << 24);   \
 }
 
 const unsigned int HashFunction::hashKeys[64] = 
@@ -40,6 +65,45 @@ void HashFunction::stateRegister() {
     srLength = 0;
     srTotalLength = 0;
 }
+
+void HashFunction::compress(const unsigned char *message, unsigned int blockNB)
+{
+    register32 w[64];
+    register32 buffer[8];
+    register32 t1, t2;
+    const unsigned char *sub_block;
+    int m;
+    int n;
+    for (m = 0; m < (int) blockNB; m++) {
+        sub_block = message + (m << 6);
+        for (n = 0; n < 16; n++) {
+            SHAF_PACK32(&sub_block[n << 2], &w[n]);
+        }
+        for (n = 16; n < 64; n++) {
+            w[n] =  SHAF_4(w[n -  2]) + w[n -  7] + SHAF_3(w[n - 15]) + w[n - 16];
+        }
+        for (n = 0; n < 8; n++) {
+            buffer[n] = sr[n];
+        }
+        for (n = 0; n < 64; n++) {
+            t1 = buffer[7] + SHAF_2(buffer[4]) + CHOICE_OF(buffer[4], buffer[5], buffer[6])
+                + hashKeys[n] + w[n];
+            t2 = SHAF_1(buffer[0]) + MAJORITY_OF(buffer[0], buffer[1], buffer[2]);
+            buffer[7] = buffer[6];
+            buffer[6] = buffer[5];
+            buffer[5] = buffer[4];
+            buffer[4] = buffer[3] + t1;
+            buffer[3] = buffer[2];
+            buffer[2] = buffer[1];
+            buffer[1] = buffer[0];
+            buffer[0] = t1 + t2;
+        }
+        for (n = 0; n < 8; n++) {
+            sr[n] += buffer[n];
+        }
+    }
+}
+
 
 void HashFunction::adjustDigest(const unsigned char* text,
                                 unsigned int textLength) {
@@ -85,5 +149,21 @@ void HashFunction::digestFinal(unsigned char *digest)
     }
 }
 
+std::string sha256(const std::vector<char>& input)
+{
+    unsigned char digest[HashFunction::PADD_SIZE];
+    memset(digest,0,HashFunction::PADD_SIZE);
+
+    HashFunction obj = HashFunction();
+    obj.stateRegister();
+    obj.adjustDigest( (unsigned char*)input.data(), input.size());
+    obj.digestFinal(digest);
+
+    char buf[2*HashFunction::PADD_SIZE+1];
+    buf[2*HashFunction::PADD_SIZE] = 0;
+    for (unsigned i = 0; i < HashFunction::PADD_SIZE; i++)
+        sprintf(buf+i*2, "%02x", digest[i]);
+    return std::string(buf);
+}
 
 
