@@ -19,36 +19,38 @@ TwinSeeker is a C++ based command-line utility that recursively scans given dire
 
 1. Clone this repository to your local machine.
 
-    ```
+    ```shell
     git clone https://github.com/Saad-Hussain31/TwinSeeker.git
     ```
 
-2. Navigate into the TwinSeeker directory and create a build directory.
+2. Navigate into the TwinSeeker directory and execute the `generate_samples.sh` script.
 
-    ```
+    ```shell
     cd TwinSeeker
+    ./generate_samples.sh
+    ```
+
+    This script generates sample files in the `samples` directory for testing TwinSeeker.
+
+3. Create a build directory.
+
+    ```shell
     mkdir build
     ```
 
-3. Change to the build directory, run CMake to configure the build, and then compile the code.
+4. Change to the build directory, run CMake to configure the build, and then compile the code.
 
-    ```
+    ```shell
     cd build
     cmake ..
     make
     ```
 
-4. The `twin-seeker` executable will be created in the `build` directory.
+5. The `twin-seeker` executable will be created in the `build` directory.
 
 ## Usage
 
 Run `twin-seeker` followed by the directories you want to scan. The tool will recursively scan the directories and output any duplicate files it finds. Here is a basic example:
 
+```shell
 ./twin-seeker directory1 directory2
-
-
-In case you provide an argument that is not a directory, TwinSeeker will print an error message and exit. In case a file cannot be read, TwinSeeker will print an error message but continue scanning other files.
-
-_Note: Replace `directory1` and `directory2` with the actual paths to directories you want to scan._
-
-
