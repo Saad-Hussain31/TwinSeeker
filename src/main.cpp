@@ -6,110 +6,121 @@
 #include <unordered_map>
 #include "sha256.hpp"
 
-
 namespace fs = std::filesystem;
-using std::cout; 
+using std::cout;
 
-// std::string sha256(const std::vector<char>& input) {
-//     return "sha256";
-// } //hashing function signature only
-
-[[noreturn]] void printUsageAndExit(int status= EXIT_SUCCESS) {
+[[noreturn]] void printUsageAndExit(int status = EXIT_SUCCESS) {
     std::cout << "Usage: twin-seeker [DIR]..\n";
     std::cout << " Detects duplicated files in the given directory(s) recursively.\n";
-    exit(status); //exit with a non-zero status code to signal that an error occurred.
+    exit(status);
+}
+
+std::vector<fs::path> gatherFilesRecursive(const fs::path& directory, std::unordered_set<std::string>& seen) {
+    std::vector<fs::path> files;
+
+    for (const auto& entry : fs::recursive_directory_iterator(directory)) {
+        const fs::path& path = entry.path();
+        if (fs::is_directory(path)) {
+            fs::path canonicalPath = fs::canonical(path);
+            if (seen.count(canonicalPath.c_str()) != 0) {
+                continue;
+            }
+            seen.insert(canonicalPath.c_str());
+            auto subFiles = gatherFilesRecursive(canonicalPath, seen);
+            files.insert(files.end(), subFiles.begin(), subFiles.end());
+        }
+        else if (fs::is_regular_file(path)) {
+            files.push_back(path);
+        }
+    }
+
+    return files;
 }
 
 std::vector<fs::path> gatherFiles(int argc, char* argv[]) {
-    std::unordered_set<std::string> seen; //to keep track of the directories already processed 
-    std::vector<fs::path> dirs; //stack for processing directories
-    for(int i = 1; i < argc; ++i) {
-        auto path = fs::canonical(fs::path{argv[i]}); //removes symlinks, emojis etc
-        if(seen.count(path.c_str()) != 0) continue;
-        seen.insert(path.c_str());
-        dirs.push_back(path);
-    }
+    std::unordered_set<std::string> seen;
+    std::vector<fs::path> files;
 
-    //walking the directories
-    std::vector<fs::path> files; //to store the file paths found during the traversal
-    while(!dirs.empty()) {
-        fs::path dir = dirs.back();
-        dirs.pop_back();
-        for (auto it = fs::directory_iterator(dir); it != fs::directory_iterator(); ++it) {
-
-            if(fs::is_directory(*it)) {
-                fs::path newDir = fs::canonical(*it);
-                if (seen.count(newDir.c_str()) != 0) continue;
-                dirs.push_back(newDir);
-                seen.insert(newDir.c_str());
-                continue;
-            }
-            if(fs::is_regular_file(*it)) {
-                files.push_back(fs::canonical(*it));
-            }
-        }
-    }
-    return files; //canonical paths of all files in the input directories and their subdirectories
-}
-
-int main(int argc, char* argv[]) {
-    if(argc < 2) {
-        printUsageAndExit();
-    }
-    
-    for(int i = 1; i < argc; ++i) {
-        fs::path path{argv[i]};
-        if(!fs::is_directory(path)) { //checks if 'path' represents a valid directory.
+    for (int i = 1; i < argc; ++i) {
+        fs::path directory{ argv[i] };
+        if (!fs::is_directory(directory)) {
             std::cerr << argv[i] << " is not a directory.\n";
             printUsageAndExit(EXIT_FAILURE);
         }
+
+        fs::path canonicalPath = fs::canonical(directory);
+        if (seen.count(canonicalPath.c_str()) != 0) {
+            continue;
+        }
+        seen.insert(canonicalPath.c_str());
+        auto subFiles = gatherFilesRecursive(canonicalPath, seen);
+        files.insert(files.end(), subFiles.begin(), subFiles.end());
     }
 
-    //gather files
-    cout << "Gathering files...\n\n";
+    return files;
+}
+
+std::string calculateFileHash(const fs::path& file) {
+    uintmax_t size = fs::file_size(file);
+    if (size == 0) {
+        return "";
+    }
+
+    std::ifstream ifs(file, std::ios::binary);
+    if (!ifs) {
+        std::cerr << "Could not open file: " << file.c_str() << std::endl;
+        return "";
+    }
+
+    std::vector<char> bytes(size);
+    ifs.read(bytes.data(), size);
+    return sha256(bytes);
+}
+
+void findDuplicateFiles(const std::vector<fs::path>& files, std::unordered_map<std::string, std::vector<fs::path>>& visitedFiles) {
+    for (const auto& file : files) {
+        std::string hash = calculateFileHash(file);
+        if (hash.empty()) {
+            visitedFiles[hash].push_back(file);
+            continue;
+        }
+
+        if (visitedFiles.count(hash) == 0) {
+            visitedFiles[hash] = std::vector<fs::path>{file};
+        }
+        else {
+            visitedFiles[hash].push_back(file);
+        }
+    }
+}
+
+void printDuplicates(const std::unordered_map<std::string, std::vector<fs::path>>& visitedFiles) {
+    cout << "Duplicates:\n";
+    for (const auto& f : visitedFiles) {
+        if (f.second.size() == 1) {
+            continue;
+        }
+        cout << "Hash: " << f.first << "\n";
+        for (const auto& file : f.second) {
+            cout << file << "\n";
+        }
+        cout << "---\n";
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        printUsageAndExit();
+    }
+
     std::vector<fs::path> files = gatherFiles(argc, argv);
+    cout << "Gathering files...\n\n";
     cout << "Gathered " << files.size() << " files\n\n";
 
-    //calculate hashes
-    std::unordered_map<std::string, std::vector<fs::path>> visitedFiles; //key is hash and val is file vector. single vec if no dups
+    std::unordered_map<std::string, std::vector<fs::path>> visitedFiles;
+    findDuplicateFiles(files, visitedFiles);
 
-    for(auto& file : files) {
-        uintmax_t size = fs::file_size(file);
-        if(size == 0) {
-            std::vector<char> empty;
-            auto hash = sha256(empty);
-            if(visitedFiles.count(hash) == 0) {
-                visitedFiles[hash] = std::vector{file};
-                continue;
-            }
-            visitedFiles[hash].push_back(file); //adding for duplicate
-            continue;
-        }
-        std::ifstream ifs(file, std::ios::binary);
-        if(!ifs) {
-            std::cerr << "Could not open file: " << file.c_str() << std::endl;
-            continue;
-        }
-        std::vector<char> bytes(size);
-		ifs.read(bytes.data(), size);
-		auto hash = sha256(bytes);
-		if (visitedFiles.count(hash) == 0) {
-			visitedFiles[hash] = std::vector{file};
-			continue;
-		}
-		visitedFiles[hash].push_back(file);
-    }
-    
-    // print results
-	cout << "Duplicates:\n";
-	for (auto& f : visitedFiles) {
-		if (f.second.size() == 1) continue;
-		cout << "Hash: " << f.first << "\n";
-		for (size_t i = 0; i < f.second.size(); ++i) {
-			cout << f.second[i] << "\n";
-		}
-		cout << "---\n";
-	}
+    printDuplicates(visitedFiles);
 
-
+    return 0;
 }
