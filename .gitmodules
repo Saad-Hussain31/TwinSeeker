@@ -1,3 +1,3 @@
-[submodule "googletest"]
-	path = googletest
-	url = git@github.com:google/googletest.git
+[submodule "flo-shani-aesni"]
+	path = flo-shani-aesni
+	url = git@github.com:armfazh/flo-shani-aesni.git
