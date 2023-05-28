@@ -110,7 +110,7 @@ void HashFunction::adjustDigest(const unsigned char* text,
                                 unsigned int textLength) {
                                     
     unsigned int blockNB;
-    unsigned int key, newLen, remLen, tempLen;
+    unsigned int newLen, remLen, tempLen;
     const unsigned char* shiftedMsg;
 
     tempLen = BLOCK_SIZE_256 - srLength;
