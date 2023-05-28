@@ -66,7 +66,8 @@ void HashFunction::stateRegister() {
     srTotalLength = 0;
 }
 
-void HashFunction::compress(const unsigned char *message, unsigned int blockNB)
+void HashFunction::compress(const unsigned char *message,
+                             unsigned int blockNB)
 {
     register32 w[64];
     register32 buffer[8];
@@ -123,7 +124,8 @@ void HashFunction::adjustDigest(const unsigned char* text,
     newLen = textLength - remLen;
     blockNB = newLen / BLOCK_SIZE_256;
     shiftedMsg = text + remLen;
-    compress(srBlock, blockNB);
+    compress(srBlock, 1);
+    compress(shiftedMsg, blockNB);
     remLen = newLen % BLOCK_SIZE_256;
     memcpy(srBlock, &shiftedMsg[blockNB << 6], remLen);
     srLength = remLen;
