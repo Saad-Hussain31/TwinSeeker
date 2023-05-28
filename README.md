@@ -46,11 +46,11 @@ TwinSeeker is a C++ based command-line utility that recursively scans given dire
     make
     ```
 
-5. The `twin-seeker` executable will be created in the `build` directory.
+5. The `twinSeeker` executable will be created in the `build` directory.
 
 ## Usage
 
-Run `twin-seeker` followed by the directories you want to scan. The tool will recursively scan the directories and output any duplicate files it finds. Here is a basic example:
+Run `twinSeeker` followed by the directories you want to scan. The tool will recursively scan the directories and output any duplicate files it finds. Here is a basic example:
 
 ```shell
-./twin-seeker directory1 directory2
+./twinSeeker ../samples 
