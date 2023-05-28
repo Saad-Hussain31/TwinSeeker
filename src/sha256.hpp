@@ -1,4 +1,5 @@
 #include <string>
+#include <vector>
 
 class HashFunction {
     protected:
@@ -23,4 +24,4 @@ class HashFunction {
         register32 sr[8];
 };
 
-std::string sha256(std::string input);
+std::string sha256(const std::vector<char>& input);

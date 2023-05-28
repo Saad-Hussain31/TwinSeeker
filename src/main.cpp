@@ -10,9 +10,9 @@
 namespace fs = std::filesystem;
 using std::cout; 
 
-std::string sha256(const std::vector<char>& input) {
-    return "sha256";
-} //hashing function signature only
+// std::string sha256(const std::vector<char>& input) {
+//     return "sha256";
+// } //hashing function signature only
 
 [[noreturn]] void printUsageAndExit(int status= EXIT_SUCCESS) {
     std::cout << "Usage: twin-seeker [DIR]..\n";
