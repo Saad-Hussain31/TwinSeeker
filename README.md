@@ -44,11 +44,18 @@ TwinSeeker is a C++ based command-line utility that recursively scans given dire
 
 Run `twinSeeker` followed by the directories you want to scan. The tool will recursively scan the directories and output any duplicate files it finds. Here is a basic example:
 
+```
 ./twinSeeker directory1 directory2
-
+```
 
 In case you provide an argument that is not a directory, TwinSeeker will print an error message and exit. In case a file cannot be read, TwinSeeker will print an error message but continue scanning other files.
 
 _Note: Replace `directory1` and `directory2` with the actual paths to directories you want to scan._
 
+To measure the time needed to run TwinSeeker, you can use the time command in Linux. The time command provides information about the system resources used by a program and its execution time. You can use it as follows:
 
+```
+time ./twinSeeker directory1 directory2
+```
+
+The time command will execute twinSeeker and display the time it took to run along with other resource usage statistics.
