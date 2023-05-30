@@ -10,7 +10,6 @@
 #include <pthread.h>
 #include <thread>
 
-
 #include "../src/flo-shani.h"
 
 namespace fs = std::filesystem;
@@ -21,11 +20,11 @@ namespace fs = std::filesystem;
     exit(status);
 }
 
-std::vector<fs::path> gatherFiles(int argc, char* argv[]) {
+std::vector<fs::path> gatherFiles(const std::vector<std::string>& directories) {
     std::unordered_set<std::string> seen;
     std::vector<fs::path> dirs; // We'll treat this as a stack
-    for (int i = 1; i < argc; ++i) {
-        auto p = fs::canonical(fs::path{argv[i]}); // This can throw exception, which is fine
+    for (const auto& directory : directories) {
+        auto p = fs::canonical(fs::path{directory}); // This can throw an exception, which is fine
         if (seen.count(p.c_str()) != 0) continue;
         seen.insert(p.c_str());
         dirs.push_back(p);
@@ -61,48 +60,74 @@ std::string digestToStr(unsigned char digest[]) {
     return std::string(buf);
 }
 
-void workerThread(int i, std::mutex& mutex, std::vector<fs::path>& files, std::unordered_map<std::string, std::vector<fs::path>>& results) {
-    while(true) {
+void processFile(const fs::path& file, std::unordered_map<std::string, std::vector<fs::path>>& results) {
+    uint8_t digest[32];
+    memset(digest, 0, 32);
+    uintmax_t size = fs::file_size(file);
+    if (size == 0) {
+        sha256_update_shani(nullptr, 0, digest);
+        auto hash = digestToStr(digest);
+        if (results.count(hash) == 0) {
+            results[hash] = std::vector{file};
+            return;
+        }
+        results[hash].push_back(file);
+        return;
+    }
+
+    std::ifstream ifs(file, std::ios::binary);
+    if (!ifs) {
+        std::cerr << "Couldn't open file: " << file.c_str() << std::endl;
+        return;
+    }
+    char* bytes = (char*)aligned_alloc(32, size);
+    ifs.read(bytes, size);
+    sha256_update_shani(reinterpret_cast<unsigned char*>(bytes), size, digest);
+    free(bytes);
+    auto hash = digestToStr(digest);
+
+    if (results.count(hash) == 0) {
+        results[hash] = std::vector{file};
+    } else {
+        results[hash].push_back(file);
+    }
+}
+
+void workerThread(int id, std::mutex& mutex, std::vector<fs::path>& files, std::unordered_map<std::string, std::vector<fs::path>>& results) {
+    while (true) {
         fs::path file;
         {
             std::lock_guard<std::mutex> lock(mutex);
-            if(files.empty())
+            if (files.empty())
                 return;
             file = files.back();
             files.pop_back();
         }
-        uint8_t digest[32];
-        memset(digest, 0, 32);
-        uintmax_t size = fs::file_size(file);
-        if (size == 0) {
-            sha256_update_shani(nullptr, 0, digest);
-            auto hash = digestToStr(digest);
-            if (results.count(hash) == 0) {
-                results[hash] = std::vector{file};
-                continue;
-            }
-            results[hash].push_back(file);
-            continue;
-        }
+        processFile(file, results);
+    }
+}
 
-        std::ifstream ifs(file, std::ios::binary);
-        if (!ifs) {
-            std::cerr << "Couldn't open file: " << file.c_str() << std::endl;
-            continue;
+void calculateHashes(std::vector<fs::path>& files, std::unordered_map<std::string, std::vector<fs::path>>& results) {
+    std::mutex mutex;
+    std::vector<std::thread> threads;
+    const int numThreads = std::thread::hardware_concurrency();
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back(workerThread, i, std::ref(mutex), std::ref(files), std::ref(results));
+    }
+    for (auto& t : threads) {
+        t.join();
+    }
+}
+
+void printDuplicates(const std::unordered_map<std::string, std::vector<fs::path>>& visitedFiles) {
+    std::cout << "Duplicates:\n";
+    for (const auto& f : visitedFiles) {
+        if (f.second.size() == 1) continue;
+        std::cout << "Hash: " << f.first << "\n";
+        for (const auto& file : f.second) {
+            std::cout << file << "\n";
         }
-        char* bytes = (char* ) aligned_alloc(32, size);
-        ifs.read(bytes, size);
-        sha256_update_shani(reinterpret_cast<unsigned char*>(bytes), size, digest);
-        free(bytes);
-        auto hash = digestToStr(digest);
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            if (results.count(hash) == 0) {
-                results[hash] = std::vector{file};
-                continue;
-            }
-            results[hash].push_back(file);
-        }
+        std::cout << "---\n";
     }
 }
 
@@ -111,40 +136,24 @@ int main(int argc, char* argv[]) {
     if (argc < 2) {
         printUsageAndExit();
     }
-    for (int i = 1; i < argc; ++i) {
-        fs::path p{argv[i]};
+    std::vector<std::string> directories(argv + 1, argv + argc);
+    for (const auto& directory : directories) {
+        fs::path p{directory};
         if (!fs::is_directory(p)) {
-            std::cerr << argv[i] << " is not a directory.\n";
+            std::cerr << directory << " is not a directory.\n";
             printUsageAndExit(EXIT_FAILURE);
         }
     }
     // Gather files
     std::cout << "Gathering files...\n\n";
-    std::vector<fs::path> files = gatherFiles(argc, argv);
+    std::vector<fs::path> files = gatherFiles(directories);
     std::cout << "Gathered " << files.size() << " files\n\n";
     // Calculate hashes
     std::cout << "Calculating SHA-256 hashes..\n\n";
-    std::mutex m;
     std::unordered_map<std::string, std::vector<fs::path>> visitedFiles;
-    std::vector<std::thread> threads;
-    for(int i=0; i<10; ++i) {
-        threads.push_back(std::thread(workerThread, i, std::ref(m), std::ref(files), std::ref(visitedFiles)));
-    }
-    for(auto& t : threads) {
-        t.join();
-    }
+    calculateHashes(files, visitedFiles);
+    // Print results
+    printDuplicates(visitedFiles);
 
-
-//
-    // Print results                                    
-    std::cout << "Duplicates:\n";
-    for (auto& f : visitedFiles) {
-        if (f.second.size() == 1) continue;
-        std::cout << "Hash: " << f.first << "\n";
-        for (size_t i = 0; i < f.second.size(); ++i) {
-            std::cout << f.second[i] << "\n";
-        }
-        std::cout << "---\n";
-    }
     return 0;
 }
